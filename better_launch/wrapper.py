@@ -380,9 +380,10 @@ def _expose_ros2_launch_function(launch_func: Callable):
         # Declare launch arguments from the function signature
         sig = inspect.signature(launch_func)
         for param in sig.parameters.values():
-            default = param.default
-            if default is not inspect.Parameter.empty:
+            if param.default is not inspect.Parameter.empty:
                 default = str(param.default)
+            else:
+                default = None
 
             ld.add_action(DeclareLaunchArgument(param.name, default_value=default))
 
@@ -392,8 +393,9 @@ def _expose_ros2_launch_function(launch_func: Callable):
             for k, v in context.launch_configurations.items():
                 try:
                     launch_args[k] = literal_eval(v)
-                except ValueError:
+                except (ValueError, SyntaxError):
                     # Probably a string
+                    # issue #11: SyntaxError happens when a path is passed without quotes
                     # NOTE this should also make passing args to ROS2 much easier
                     launch_args[k] = v
 
