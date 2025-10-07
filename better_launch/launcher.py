@@ -46,6 +46,7 @@ except ImportError:
     def _generate_uuid() -> str:
         return uuid.uuid4().hex
 
+
 from better_launch.elements import (
     Group,
     AbstractNode,
@@ -235,9 +236,9 @@ Takeoff in 3... 2... 1...
         if exit_with_last_node:
             while not self._shutdown_future.done():
                 nodes = self.all_nodes(
-                        include_components=True,
-                        include_launch_service=True,
-                        include_foreign=False
+                    include_components=True,
+                    include_launch_service=True,
+                    include_foreign=False,
                 )
 
                 if all(not n.is_running for n in nodes):
@@ -327,6 +328,12 @@ Takeoff in 3... 2... 1...
             nodes.extend(find_foreign_nodes())
 
         return nodes
+
+    def live_nodes(self) -> list[AbstractNode]:
+        nodes = self.all_nodes(
+            include_components=True, include_launch_service=True, include_foreign=False
+        )
+        return [n for n in nodes if n.is_running]
 
     def query_node(
         self,
@@ -1768,7 +1775,7 @@ Takeoff in 3... 2... 1...
             try:
                 with open(file_path) as f:
                     source = f.read()
-                    
+
                 code = compile(source, launchfile, "exec")
 
                 # Make sure the included launch file reuses our BetterLaunch instance

@@ -372,8 +372,9 @@ def _expose_ros2_launch_function(launch_func: Callable):
     """
 
     def generate_launch_description():
+        import asyncio
         from launch import LaunchDescription, LaunchContext
-        from launch.actions import DeclareLaunchArgument, OpaqueFunction
+        from launch.actions import DeclareLaunchArgument, OpaqueCoroutine
 
         ld = LaunchDescription()
 
@@ -387,8 +388,7 @@ def _expose_ros2_launch_function(launch_func: Callable):
 
             ld.add_action(DeclareLaunchArgument(param.name, default_value=default))
 
-        def ros2_wrapper(context: LaunchContext, *args, **kwargs):
-            # args and kwargs are only used by OpaqueFunction when using it like partial
+        async def ros2_wrapper(context: LaunchContext):
             launch_args = {}
             for k, v in context.launch_configurations.items():
                 try:
@@ -402,10 +402,15 @@ def _expose_ros2_launch_function(launch_func: Callable):
             # Call the launch function
             launch_func(**launch_args)
 
-            # Not needed right now, but opaque functions may return additional ROS2 actions
-            return
+            # We must stay alive until the last node has exited
+            bl = BetterLaunch.instance()
+            if bl:
+                while any(bl.live_nodes()):
+                    await asyncio.sleep(0.1)
 
-        ld.add_action(OpaqueFunction(function=ros2_wrapper))
+        # A bit of an obscure one, but this way we can stay alive even when all other launch
+        # actions have terminated
+        ld.add_action(OpaqueCoroutine(coroutine=ros2_wrapper))
         return ld
 
     # Add our generate_launch_description function to the module launch_this was called from
