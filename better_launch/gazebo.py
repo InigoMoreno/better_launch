@@ -408,7 +408,6 @@ def spawn_topic_bridge(
         node_name,
         cmd_args=args,
         remaps=all_remaps,
-        raw=True,
         **kwargs
     )
 
@@ -579,7 +578,7 @@ class GazeboBridge:
         if not m:
             raise ValueError(bridge + " is not a valid bridge string")
 
-        return GazeboBridge(m.group(1), m.group(2), m.group(3), m.group(4))
+        return GazeboBridge(m.group(1), m.group(2), m.group(3), m.group(4), remaps=remaps)
 
     @classmethod
     def clock_bridge(cls) -> "GazeboBridge":

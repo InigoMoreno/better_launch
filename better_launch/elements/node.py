@@ -164,10 +164,10 @@ class Node(AbstractNode, LiveParamsMixin):
                 final_cmd.extend(self.cmd_args)
 
             if not self.raw:
+                final_cmd += ["--ros-args"]
+
                 if self.node_log_level is not None:
                     final_cmd += ["--log-level", self.node_log_level]
-
-                final_cmd += ["--ros-args"]
 
                 # Attach node parameters
                 for key, value in self._flat_params().items():

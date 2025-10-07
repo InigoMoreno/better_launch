@@ -257,7 +257,6 @@ def static_transform_publisher(
         "static_transform_publisher",
         "gazebo_world_tf",
         cmd_args=args,
-        raw=True,
     )
 
 
