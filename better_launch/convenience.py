@@ -58,8 +58,8 @@ def rviz(
 
 
 def read_robot_description(
-    package: str = None,
-    description_file: str = None,
+    package: str,
+    description_file: str,
     subdir: str = None,
     *,
     xacro_args: list[str] = None,
@@ -70,9 +70,9 @@ def read_robot_description(
 
     Parameters
     ----------
-    package : str, optional
-        The package where the robot description file is located. May be `None` (see :py:meth:`BetterLaunch.find`)
-    description_file : str, optional
+    package : str
+        The package where the robot description file is located. May be `None` to use this launch file's package (see :py:meth:`BetterLaunch.find`).
+    description_file : str
         The name of the robot description file (URDF or XACRO).
     subdir : str, optional
         A path fragment the description file must be located in.
@@ -107,12 +107,14 @@ def read_robot_description(
         raise ValueError(f"Xacro failed ({e.returncode}): {e.output}") from e
 
 
-def joint_state_publisher(use_gui: bool, node_name: str = None, **kwargs) -> Node:
+def joint_state_publisher(
+    use_gui: bool = False, node_name: str = None, **kwargs
+) -> Node:
     """Starts a `joint_state_publisher` or `joint_state_publisher_gui` node.
 
     Parameters
     ----------
-    use_gui : bool
+    use_gui : bool, optional
         Whether to use the GUI version of the `joint_state_publisher`.
     node_name : str, optional
         The name of the node. If not provided the name of the executable will be used. Will be anonymized unless `anonymous=False` is passed.
@@ -145,8 +147,8 @@ def joint_state_publisher(use_gui: bool, node_name: str = None, **kwargs) -> Nod
 
 
 def robot_state_publisher(
-    package: str = None,
-    description_file: str = None,
+    package: str,
+    description_file: str,
     subdir: str = None,
     *,
     xacro_args: list[str] = None,
@@ -157,9 +159,9 @@ def robot_state_publisher(
 
     Parameters
     ----------
-    package : str, optional
-        The name of the package containing the robot description file.
-    description_file : str, optional
+    package : str
+        The name of the package containing the robot description file. May be `None` to use this launch file's package (see :py:meth:`BetterLaunch.find`).
+    description_file : str
         The name of the robot description for the robot. Typically a .sdf, .urdf or .xacro file.
     subdir : str, optional
         A path fragment the description file must be located in.
@@ -261,7 +263,7 @@ def static_transform_publisher(
 
 
 def spawn_controller(controller: str, manager: str = "controller_manager") -> Node:
-    """Spawn the specified controller. 
+    """Spawn the specified controller.
 
     Parameters
     ----------
