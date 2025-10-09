@@ -39,6 +39,8 @@ class Node(AbstractNode, LiveParamsMixin):
         respawn_delay: float = 0.0,
         use_shell: bool = False,
         raw: bool = False,
+        remap_namespace_key: str = "__ns",
+        remap_name_key: str = "__node",
     ):
         """An object used for starting a ROS node and capturing its output.
 
@@ -80,11 +82,10 @@ class Node(AbstractNode, LiveParamsMixin):
             If True, invoke the node executable via the system shell. While this gives access to the shell's builtins, this has the downside of running the node inside a "mystery program" which is platform and user dependent. Generally not advised.
         raw : bool, optional
             If True, don't treat the executable as a ROS2 node and avoid passing it any command line arguments except those specified.
-
-        Returns
-        -------
-        Node
-            The node object wrapping the node process.
+        remap_namespace_key : str, optional
+            Key to use for remapping the node's namespace. "Useful" in cases where you want to e.g. remap topics separate from services. See `this ROS2 design doc <https://design.ros2.org/articles/static_remapping.html#how-the-syntax-works`_ for more information.
+        remap_name_key : str, optional
+            Key to use for remapping the node's name. Useful to prevent remapping multiple nodes to the same name, which can happen if a node creates additional nodes (e.g. `controller_manager`). See `this issue <https://github.com/ros2/rviz/issues/671>`_ for more information.
         """
         super().__init__(
             package, executable, name, namespace, remaps, params, output=output
@@ -103,6 +104,8 @@ class Node(AbstractNode, LiveParamsMixin):
         self._process: subprocess.Popen = None
         self._on_exit_callback = on_exit
         self.raw = raw
+        self._name_key = remap_name_key
+        self._namespace_key = remap_namespace_key
 
     @property
     def pid(self) -> int:
@@ -177,7 +180,20 @@ class Node(AbstractNode, LiveParamsMixin):
                 # Special args and remaps
                 # launch_ros/actions/node.py:206
                 for src, dst in self._ros_args().items():
-                    # launch_ros/actions/node.py:481
+                    # More ROS2 shenanigans...
+                    if src == "__ns":
+                        if self._namespace_key:
+                            src = self._namespace_key
+                        else:
+                            continue
+
+                    # See https://github.com/ros2/rviz/issues/671
+                    if src in ("__node", "__name"):
+                        if self._name_key:
+                            src = self._name_key
+                        else:
+                            continue
+                    
                     final_cmd.extend(["-r", f"{src}:={dst}"])
 
             # If an env is specified ROS2 lets it completely replace the host env. We cover this
@@ -330,7 +346,7 @@ class Node(AbstractNode, LiveParamsMixin):
             if not BetterLaunch.instance().is_shutdown and (
                 self.max_respawns < 0 or self._respawn_retries < self.max_respawns
             ):
-                self.logger.info(f"Restarting {self.name} after unexpected shutdown")
+                self.logger.info(f"Restarting {repr(self)} after unexpected shutdown")
 
                 self._respawn_retries += 1
                 if self.respawn_delay > 0.0:
@@ -377,26 +393,26 @@ class Node(AbstractNode, LiveParamsMixin):
         if not self.is_running:
             # the process is done or is cleaning up, no need to signal
             self.logger.info(
-                f"'{signame}' not set to '{self.name}' because it is already closing"
+                f"{signame} not sent to {repr(self)} because it is already closing"
             )
             return
 
         if platform.system() == "Windows" and signum == signal.SIGINT:
             # Windows doesn't handle sigterm correctly
             self.logger.warning(
-                f"'SIGINT' sent to process[{self.name}] not supported on Windows, escalating to 'SIGTERM'"
+                "SIGINT not supported on Windows, escalating to 'SIGTERM'"
             )
 
             signum = signal.SIGTERM
             signame = signal.SIGTERM.name
 
-        self.logger.info(f"Sending signal '{signame}' to process [{self.name}]")
+        self.logger.info(f"Sending signal {signame} to {repr(self)}")
 
         try:
             self._process.send_signal(signum)
         except ProcessLookupError:
             self.logger.info(
-                f"'{signame}' not sent to '{self.name}' because it has closed already"
+                f"{signame} not sent to {repr(self)} because it has closed already"
             )
 
     def _on_shutdown(self) -> None:
@@ -429,4 +445,4 @@ class Node(AbstractNode, LiveParamsMixin):
         )
 
     def __repr__(self) -> str:
-        return f"{self.name} [node {self.node_id}, cmd {self.package}/{self.executable}, pid {self.pid}, running {self.is_running}]"
+        return f"Node [name={self.name}, node={self.package}:{self.executable}, pid={self.pid}]"

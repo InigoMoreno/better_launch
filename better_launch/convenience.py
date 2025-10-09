@@ -9,7 +9,7 @@ __all__ = [
 ]
 
 
-from typing import Sequence
+from typing import Sequence, Any
 import subprocess
 
 from better_launch import BetterLaunch
@@ -259,6 +259,46 @@ def static_transform_publisher(
         "static_transform_publisher",
         "gazebo_world_tf",
         cmd_args=args,
+    )
+
+
+def spawn_controller_manager(
+    robot_description: str,
+    controller_config: str | dict[str, Any] = None,
+    name: str = "controller_manager",
+) -> Node:
+    """Spawn a new controller manager.
+
+    Parameters
+    ----------
+    robot_description : str
+        The contents of a robot description to use. Can be read with :py:meth:`read_robot_description`.
+    controller_config : str | dict[str, Any], optional
+        The controller manager config to use (typically named `controller.yaml`). If a string is passed it is considered as a path and loaded via :py:meth:`BetterLaunch.load_params`. 
+    name : str, optional
+        The name the controller manager node should use. 
+
+    Returns
+    -------
+    Node
+        The node running the controller manager process.
+    """
+    bl = BetterLaunch.instance()
+
+    params = {"robot_description": robot_description}
+
+    if isinstance(controller_config, str):
+        controller_config = bl.load_params(controller_config)
+    params.update(controller_config)
+
+    return bl.node(
+        package="controller_manager",
+        executable="ros2_control_node",
+        name=name,
+        params=params,
+        # Prevent renaming nodes spawned by the manager
+        # See https://robotics.stackexchange.com/q/99005/36544
+        remap_name_key="nodename:controller_manager",
     )
 
 
