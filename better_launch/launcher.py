@@ -31,21 +31,6 @@ if TYPE_CHECKING:
         ActionClient as RosActionClient,
     )
 
-try:
-    # For anonymous nodes
-    import wonderwords
-
-    _uuid_source = wonderwords.RandomWord(exclude_with_spaces=True)
-
-    def _generate_uuid() -> str:
-        return _uuid_source.word()
-
-except ImportError:
-    import uuid
-
-    def _generate_uuid() -> str:
-        return uuid.uuid4().hex
-
 
 from better_launch.elements import (
     Group,
@@ -70,6 +55,7 @@ from better_launch.utils.introspection import (
     find_launchthis_function,
 )
 from better_launch.utils.better_logging import LogSink
+from better_launch.utils.random_names import get_unique_name
 from better_launch.ros.ros_adapter import ROSAdapter
 from better_launch.ros import logging as roslog
 
@@ -254,20 +240,33 @@ Takeoff in 3... 2... 1...
             except (CancelledError, TimeoutError):
                 pass
 
-    def get_unique_name(self, name: str = "") -> str:
-        """Adds a unique suffix to the provided string.
+    def get_unique_name(self, name: str = "", check_running_nodes: bool = True) -> str:
+        """Returns a unique name. If a name is provided it will be prepended with an underscore.
 
         Parameters
         ----------
         name : str, optional
             The string to use as the base.
+        check_running_nodes : bool, optional
+            If true, check the currently running ROS2 nodes for name collisions.
 
         Returns
         -------
         str
-            The passed in string with a unique suffix.
+            A unique name.
         """
-        return name + "_" + _generate_uuid()
+        node_names = set()
+        if check_running_nodes:
+            nodes = self.all_nodes(include_components=True, include_foreign=True)
+            node_names.update(n.name for n in nodes)
+
+        while True:
+            u = get_unique_name()
+            if name:
+                u = name + "_" + u
+
+            if u not in node_names:
+                return u
 
     def all_groups(self) -> list[Group]:
         """Returns a list of all in the order they were created.

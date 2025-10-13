@@ -358,9 +358,6 @@ Then run the following commands to install the dependencies into your *venv*.
 ```bash
 # Can't use rosdep as it doesn't know most python packages
 pip install -r path/to/better_launch/requirements.txt
-
-# Optional, used for anonymous node names
-pip install wonderwords
 ```
 </details>
 
@@ -376,9 +373,6 @@ sudo apt install python3-pip python3-click python3-yaml python3-setproctitle pyt
 
 # Install any dependencies not offered by your package manager via pip
 sudo pip install --break-system-packages docstring_parser
-
-# Optional, used for anonymous node names
-sudo pip install --break-system-packages wonderwords
 ```
 </details>
 
