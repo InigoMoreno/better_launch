@@ -57,7 +57,7 @@ from better_launch.utils.introspection import (
     find_launchthis_function,
 )
 from better_launch.utils.better_logging import LogSink
-from better_launch.utils.random_names import get_unique_name
+from better_launch.utils.random_names import get_unique_word
 from better_launch.ros.ros_adapter import ROSAdapter
 from better_launch.ros import logging as roslog
 
@@ -272,7 +272,7 @@ Takeoff in 3... 2... 1...
             if self.short_unique_names:
                 u = secrets.token_hex(4)
             else:
-                u = get_unique_name()
+                u = get_unique_word()
 
             if name:
                 u = name + "_" + u
@@ -1022,8 +1022,10 @@ Takeoff in 3... 2... 1...
         if isinstance(message_type, str):
             message_type: type = self.get_ros_message_type(message_type)
 
-        pub = self.publisher(topic, message_type, qos_profile)
         msg = message_type(**message_args)
+        self.logger.info(f"Publishing single message to {topic}:\n   {msg}")
+
+        pub = self.publisher(topic, message_type, qos_profile)
         pub.publish(msg)
 
         if time_to_publish is not None and time_to_publish > 0.0:
@@ -1162,6 +1164,7 @@ Takeoff in 3... 2... 1...
         else:
             req = service_type.Request()
 
+        self.logger.info(f"Calling service {topic}:\n   {req}")
         srv = self.service_client(topic, service_type, timeout, qos_profile)
 
         if call_async:

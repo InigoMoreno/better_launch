@@ -418,15 +418,20 @@ class ForeignNode(AbstractNode, LiveParamsMixin):
         proc = self._process
         if proc:
             try:
+                # Seems to work here despite setpgrp?
                 return proc.wait(timeout)
             except psutil.TimeoutExpired as e:
                 raise TimeoutError from e
 
     def start(self) -> None:
+        """Usually a foreign node will already be running upon construction. However, this method can be used when restarting the process after it has terminated.
+        
+        See also :py:meth:`takeover`.
+        """
         from better_launch import BetterLaunch
 
-        launcher = BetterLaunch.instance()
-        if launcher.is_shutdown:
+        bl = BetterLaunch.instance()
+        if bl.is_shutdown:
             self.logger.warning(
                 f"Node {self} will not be started as the launcher has already shut down"
             )
@@ -460,6 +465,7 @@ class ForeignNode(AbstractNode, LiveParamsMixin):
             cwd=None,
             shell=False,
             text=True,
+            preexec_fn=os.setpgrp,  # start in separate process group
         )
 
         # Watch the process and notify user when it terminates

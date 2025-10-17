@@ -139,7 +139,8 @@ class Node(AbstractNode, LiveParamsMixin):
         proc = self._process
         if proc:
             try:
-                proc.wait(timeout)
+                # Seems to work here despite setpgrp?
+                return proc.wait(timeout)
             except subprocess.TimeoutExpired as e:
                 raise TimeoutError from e
 
@@ -219,6 +220,8 @@ class Node(AbstractNode, LiveParamsMixin):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                # start in separate process group so it doesn't react to our sigint immediately
+                preexec_fn=os.setpgrp,
             )
 
             # Watch the process for output and react when it terminates
@@ -327,7 +330,7 @@ class Node(AbstractNode, LiveParamsMixin):
                 if err_bundle:
                     log_bundle(err_bundle, logging.ERROR)
 
-            returncode = process.wait()
+            returncode = process.poll()
 
             if returncode == 0:
                 self.logger.warning("Process has finished cleanly")
@@ -335,6 +338,8 @@ class Node(AbstractNode, LiveParamsMixin):
                 self.logger.critical(f"Process has died with exit code {returncode}")
 
         finally:
+            self.logger.info(f"Terminated: {self}")
+
             if self._on_exit_callback:
                 self._on_exit_callback()
 
@@ -378,7 +383,9 @@ class Node(AbstractNode, LiveParamsMixin):
             return
 
         try:
-            self._process.wait(timeout)
+            # Since introducing setpgrp above _process.wait hangs indefinitely
+            #self._process.wait(timeout)
+            os.waitpid(self.pid, 0)
         except subprocess.TimeoutExpired:
             raise TimeoutError("Node did not shutdown within the specified timeout")
 
@@ -407,6 +414,7 @@ class Node(AbstractNode, LiveParamsMixin):
         self.logger.info(f"Sending signal {signame} to {repr(self)}")
 
         try:
+            #os.killpg(self.pid, signum)
             self._process.send_signal(signum)
         except ProcessLookupError:
             self.logger.info(

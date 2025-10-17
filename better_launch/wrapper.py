@@ -140,7 +140,7 @@ def _launch_this_wrapper(
         sigint_count += 1
 
         # Some terminals will send SIGINT multiple times on ctrl-c, so we ignore the second one
-        if sigint_count == 1:
+        if sigint_count == 2:
             return
 
         BetterLaunch()._on_sigint(sig, frame)

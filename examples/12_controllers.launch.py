@@ -31,15 +31,15 @@ def parambolage():
     )
     params["robot_description"] = robot_description
 
-    # NOTE we could use convenience.spawn_controller_manager, but this launch file also serves to 
+    # NOTE we could use convenience.spawn_controller_manager, but this launch file also serves to
     # show how to load parameters and some more technical nuances
     manager = bl.node(
         package="controller_manager",
         executable="ros2_control_node",
         name="controller_manager",
         params=params,
-        # Qualify the name and namespace remaps with the ORIGINAL name of the manager. The original 
-        # name is passed to the node's implementation on construction and usually hardcoded. 
+        # Qualify the name and namespace remaps with the ORIGINAL name of the manager. The original
+        # name is passed to the node's implementation on construction and usually hardcoded.
         # See https://github.com/ros-controls/ros2_control/blob/6cbb5f0ff69c1abcab97dde4f99ccc84d0b3f5bb/controller_manager/src/ros2_control_node.cpp#L58
         remap_qualifier="controller_manager",
     )
@@ -48,7 +48,14 @@ def parambolage():
     convenience.spawn_controller("joint_state_broadcaster")
     pprint(bl.all_ros2_node_names())
 
-    # TODO since the controller is spawned inside the controller manager's process 
-    # it is currently not possible to interact with it from better_launch
-    # controller = bl.query_node("/joint_state_broadcaster")
-    # print(controller.get_live_params())
+    # TODO since the controller is spawned inside the controller manager's process, it is 
+    # currently not possible to interact with it from better_launch. I will find a way...
+    #controller = bl.query_node("/joint_state_broadcaster")
+    #print(controller.get_live_params())
+
+    ret = bl.call_service(
+        "/joint_state_broadcaster/get_parameters",
+        "rcl_interfaces/srv/GetParameters",
+        request_args={"names": ["frame_id"]},
+    )
+    print(f"=> Controller frame_id: {ret.values[0].string_value}")

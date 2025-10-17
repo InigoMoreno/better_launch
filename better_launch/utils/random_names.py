@@ -69,8 +69,8 @@ class UniqueWordGenerator:
 default_name_generator = UniqueWordGenerator()
 
 
-def get_unique_name() -> str:
-    return default_name_generator.get_unique_name()
+def get_unique_word() -> str:
+    return default_name_generator.get_unique_word()
 
 
 if __name__ == "__main__":
