@@ -5,7 +5,6 @@ import os
 import signal
 import inspect
 import time
-import re
 import threading
 import subprocess
 from fnmatch import fnmatch
