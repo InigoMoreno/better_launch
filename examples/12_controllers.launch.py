@@ -58,4 +58,4 @@ def parambolage():
         "rcl_interfaces/srv/GetParameters",
         request_args={"names": ["frame_id"]},
     )
-    print(f"=> Controller frame_id: {ret.values[0].string_value}")
+    print(f"\n=> Is my frame awesome? {ret.values[0].string_value}\n")
