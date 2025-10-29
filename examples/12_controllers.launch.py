@@ -33,7 +33,7 @@ def parambolage():
 
     # NOTE we could use convenience.spawn_controller_manager, but this launch file also serves to
     # show how to load parameters and some more technical nuances
-    manager = bl.node(
+    bl.node(
         package="controller_manager",
         executable="ros2_control_node",
         name="controller_manager",
@@ -43,9 +43,14 @@ def parambolage():
         # See https://github.com/ros-controls/ros2_control/blob/6cbb5f0ff69c1abcab97dde4f99ccc84d0b3f5bb/controller_manager/src/ros2_control_node.cpp#L58
         remap_qualifier="controller_manager",
     )
-    print(manager.get_live_params())
+
+    # Discover the manager node even if we didn't keep a reference to it
+    manager = bl.query_node("controller_manager")
+    print("Retrieving controller manager parameters")
+    pprint(manager.get_live_params())
 
     convenience.spawn_controller("joint_state_broadcaster")
+    print("Running ROS2 nodes:")
     pprint(bl.all_ros2_node_names())
 
     # TODO since the controller is spawned inside the controller manager's process, it is 

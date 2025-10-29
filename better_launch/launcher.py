@@ -358,8 +358,8 @@ Takeoff in 3... 2... 1...
         return find_foreign_nodes()
 
     def all_ros2_node_names(self) -> list[str]:
-        """Returns a list of all currently registered node's full names (namespace + name). 
-        
+        """Returns a list of all currently registered node's full names (namespace + name).
+
         This list is guaranteed to be complete as far as ROS2 is concerned. If you require a node object you can actually interact with consider using :py:meth:`query_node` or :py:meth:`get_bl_nodes` instead.
 
         Returns
@@ -833,9 +833,13 @@ Takeoff in 3... 2... 1...
             for key, val in cur.items():
                 if key in ("*", "**", "/**", "ros__parameters"):
                     val = val.get("ros__parameters", val)
-                    
+
                     # Global parameters should always be included
-                    if not path or not matching_only or (qualifier and fnmatch(qualifier, path)):
+                    if (
+                        not path
+                        or not matching_only
+                        or (qualifier and fnmatch(qualifier, path))
+                    ):
                         for param_name, param_val in val.items():
                             param_path = f"{path}:{param_name}" if path else param_name
                             final_params[param_path] = param_val
@@ -847,7 +851,9 @@ Takeoff in 3... 2... 1...
                 else:
                     # Some value that's not a dict and not a ros__parameters, just add it
                     leaf_path = f"{path}/{key}" if path else key
-                    if not matching_only or (qualifier and fnmatch(qualifier, leaf_path)):
+                    if not matching_only or (
+                        qualifier and fnmatch(qualifier, leaf_path)
+                    ):
                         final_params[leaf_path] = val
 
         return final_params
@@ -1375,9 +1381,25 @@ Takeoff in 3... 2... 1...
         if isinstance(cmd, str):
             cmd = cmd.split(" ")
 
-        return (
-            subprocess.check_output(cmd, stderr=subprocess.STDOUT).decode().rstrip("\n")
+        bl = BetterLaunch.instance()
+        if bl:
+            logger = bl.logger
+        else:
+            logger = logging.getLogger("Exec")
+
+        # In case this is a ROS2 process we want it to use a different format
+        env = os.environ.copy()
+        env["RCUTILS_CONSOLE_OUTPUT_FORMAT"] = "  [EXEC] {message}"
+
+        logger.info(f"Executing command {cmd}")
+        ret = (
+            subprocess.check_output(cmd, env=env, stderr=subprocess.STDOUT)
+            .decode()
+            .rstrip("\n")
         )
+        logger.info(ret)
+
+        return ret
 
     def node(
         self,

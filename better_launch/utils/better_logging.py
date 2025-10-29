@@ -174,7 +174,7 @@ class PrettyLogFormatter(logging.Formatter):
 
         return ""
 
-    def formatTime(self, record, datefmt=None):
+    def formatTime(self, record: logging.LogRecord, datefmt: str = None) -> str | float:
         try:
             dt: datetime = self.converter(record.created)
             if datefmt:
@@ -183,7 +183,7 @@ class PrettyLogFormatter(logging.Formatter):
         except Exception:
             return record.created
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         match = self.roslog_pattern.match(record.msg)
 
         if match:
