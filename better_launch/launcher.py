@@ -338,10 +338,20 @@ Takeoff in 3... 2... 1...
             nodes.append(self._ros2_launcher)
 
         if include_foreign:
-            # Note that self.shared_node.get_node_names_and_namespaces() will only give us the node
-            # names and namespaces, but no handle on the actual process
-            # TODO should check if it's a composer
-            nodes.extend(self.get_foreign_nodes())
+            # Note that self.shared_node.get_node_names_and_namespaces() will only give us the 
+            # names and namespaces, but no handle on the actual processes, not even a package
+
+            # TODO should check if it's a composer and has subnodes, but we won't know the 
+            # components' handles or plugins...
+            # if include_components:
+            #     for f in foreign:
+            #         if Composer.is_composer(f):
+            #             composer = Composer(f)
+            #             for cid, component in composer.get_live_components().items():
+            #                 nodes.append(Component(...))
+            
+            foreign = self.get_foreign_nodes()
+            nodes.extend(foreign)
 
         return nodes
 
