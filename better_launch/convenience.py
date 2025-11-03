@@ -266,24 +266,24 @@ def static_transform_publisher(
 
 def spawn_controller_manager(
     params: str | dict[str, Any] = None,
+    robot_description: str = None,
     *,
     remaps: dict[str, str] = None,
     cmd_args: list[str] = None,
-    robot_description: str = None,
     name: str = "controller_manager",
 ) -> Node:
     """Spawn a new controller manager.
 
     Parameters
     ----------
-    manager_config : str | dict[str, Any], optional
+    robot_description : str, optional
+        Convenience for remapping the robot description topic. On Humble or lower this can also be the contents as returned by :py:meth:`read_robot_description`, however, this is not recommended. If not provided, the description will be read from the `~/robot_description` topic.
+    params : str | dict[str, Any], optional
         The controller manager config to use (typically named `controller.yaml`). If a string is passed it is considered as a path and loaded via :py:meth:`BetterLaunch.load_params`.
     remaps : dict[str, str], optional
         Topic remaps for the controller manager, e.g. for the `~/robot_description` topic it usually subscribes to.
     cmd_args: list[str], optional
         Additional CLI arguments to pass to the spawner command (e.g. `--load-only`).
-    robot_description : str, optional
-        The contents of a robot description. This is not recommended anymore, but see :py:meth:`read_robot_description` if you are interested nonetheless. If not provided, the description will be read from the `~/robot_description` topic.
     name : str, optional
         The name the controller manager node should use. The rename is qualified and so won't affect controllers spawned later (see `this document <https://control.ros.org/humble/doc/ros2_control/controller_manager/doc/userdoc.html#using-the-controller-manager-in-a-process>`_ for details). Note however that many nodes and CLI programs (e.g. `ros2 control`) expect the manager to be named `controller_manager` and won't work properly otherwise.
 
@@ -304,7 +304,7 @@ def spawn_controller_manager(
     if params is None:
         params = {}
     elif isinstance(params, str):
-        # In theory you could pass the config and then change it before a controller is loaded, 
+        # In theory one could pass the config and then change it before a controller is loaded, 
         # but that seems debatable at best. If you truly want this, either pass the file path as
         # a cmd arg, or keep the manager and controller configs separate and pass the later to 
         # spawn_controller below.
@@ -312,7 +312,15 @@ def spawn_controller_manager(
         params = bl.load_params(None, params, matching_only=False)
 
     if robot_description:
-        params["robot_description"] = robot_description
+        if robot_description.startswith("<?xml"):
+            if bl.ros_distro()[0].lower() >= "j":
+                raise ValueError("Passing a robot description by value is deprecated in ROS Jazzy and beyond")
+            params["robot_description"] = robot_description
+        else:
+            # Assume it's a topic
+            if remaps is None:
+                remaps = {}
+            remaps["robot_description"] = robot_description
 
     return bl.node(
         package="controller_manager",
@@ -344,7 +352,8 @@ def spawn_controller(
     controller : str
         The controller to spwawn.
     params : str | list[str] | dict[str, Any], optional
-        Additional parameters for the controller node. Can be a path to a ROS2 config, a list of paths, or a dict with the actual key-value pairs.
+        Additional parameters for the controller node. Can be a path to a ROS2 config, a list of paths, or a dict with the actual key-value pairs. Note that passing a dict is only 
+        supported for ROS Jazzy and newer.
     remaps : dict[str, str], optional
         Additional remaps specific to the controller. These will be qualified with the controller's name to avoid conflicts.
     cmd_args: list[str], optional
