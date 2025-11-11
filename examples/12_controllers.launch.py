@@ -25,11 +25,13 @@ def parambolage():
     print("Loaded parameters:")
     pprint(params, indent=2)
 
-    # We need a robot config, otherwise the control_manager won't accept any controllers
-    robot_description = convenience.read_robot_description(
-        "better_launch", "minimal_robot.urdf"
+    # We need a robot state publisher to load the URDF and publish it on [/robot_desciption]
+    convenience.robot_state_publisher(
+        package="better_launch",
+        description_file="minimal_robot.urdf",
+        node_name="robot_state_publisher",
+        anonymous=False
     )
-    params["robot_description"] = robot_description
 
     # NOTE we could use convenience.spawn_controller_manager, but this launch file also serves to
     # show how to load parameters and some more technical nuances
