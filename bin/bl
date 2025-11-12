@@ -191,10 +191,10 @@ class BetterLaunchFile(LaunchFile):
         super().__init__(package, launchfile, filepath, params, doc)
 
     def run(self, ctx: click.Context, **kwargs) -> None:
-        print(
-            f">> Delegating to better_launch: {self.package}/{self.launchfile}, args={kwargs}",
-            flush=True,
-        )
+        # print(
+        #     f">> Delegating to better_launch: {self.package}/{self.launchfile}, args={kwargs}",
+        #     flush=True,
+        # )
 
         # First argument becomes argv[0], so should be the program name
         args = ["python3", self.filepath]
@@ -499,7 +499,7 @@ class PackageSelectionCLI(click.MultiCommand):
             help="""\
 The better_launch launcher.
 
-This script allows you to run both better_launch and ROS2 launch files. While using ROS2 launch should work, it would mean having an additional launch system instance running (worst case: ros2launch -> better_launch -> ros2_launch). 
+This script allows you to run both better_launch and ROS2 launch files. While using ROS2 launch should work, it would mean having an additional launch system instance running (worst case: ros2launch -> better_launch -> ros2_launch).
 
 In contrast to ROS2 launch, it also generates useful shell completion suggestions for packages, launch files and arguments. Launch args declared in your launch files are also recognized and will be completed (you need to type at least one dash though).
 """,
@@ -525,7 +525,7 @@ In contrast to ROS2 launch, it also generates useful shell completion suggestion
         try:
             return LaunchfileSelectionCLI(name)
         except Exception:
-            # The LaunchfileSelectionCLI will throw a PackageNotFoundError if colcon failed 
+            # The LaunchfileSelectionCLI will throw a PackageNotFoundError if colcon failed
             # to install a package, and ValueError if the package name is invalid
             return None
 

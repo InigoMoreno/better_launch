@@ -103,8 +103,8 @@ def _launch_this_wrapper(
     # NOTE be careful not to instantiate BetterLaunch before launch_func has run
     if _bl_singleton_instance not in glob:
         BetterLaunch._launchfile = find_calling_frame(_launch_this_wrapper).filename
-        print(f"Starting launch file:\n{BetterLaunch._launchfile}\n")
-        print(f"Log files will be saved at\n{roslog.launch_config.log_dir}\n")
+        print(f"Starting launch file: {BetterLaunch._launchfile}\n")
+        print(f"Log files will be saved at {roslog.launch_config.log_dir}\n")
         print("==================================================")
     else:
         # We have been included from another file, run the launch function and skip the remaining
@@ -158,7 +158,7 @@ def _launch_this_wrapper(
     screen_log_format = os.environ.get("BL_SCREEN_LOG_FORMAT_OVERRIDE", screen_log_format)
     file_log_format = os.environ.get("BL_FILE_LOG_FORMAT_OVERRIDE", file_log_format)
     colormode = os.environ.get("BL_COLORMODE_OVERRIDE", colormode)
-    
+
     env_ui = os.environ.get("BL_UI_OVERRIDE", "").lower()
     if env_ui in ("enable", "true", "1"):
         ui = True
@@ -188,7 +188,7 @@ def _launch_this_wrapper(
         owner = frame_locals["self"]
 
         if type(owner).__name__ == "IncludeLaunchDescription":
-            # We were included or started by ROS2, expose the expected launch method in our 
+            # We were included or started by ROS2, expose the expected launch method in our
             # caller's globals and return
             print(
                 f"[NOTE] Launch file {os.path.basename(BetterLaunch._launchfile)} got included from ROS2"
@@ -316,7 +316,7 @@ def _launch_this_wrapper(
                 bl = BetterLaunch.instance()
                 if bl and not bl.is_shutdown:
                     bl.shutdown(f"Exception in launch file: {e}")
-                
+
                 raise
 
             # Retrieve the BetterLaunch singleton
@@ -335,7 +335,7 @@ def _launch_this_wrapper(
             from better_launch.tui.better_tui import BetterTui
 
             app = BetterTui(
-                launch_func_wrapper, 
+                launch_func_wrapper,
                 manage_foreign_nodes=manage_foreign_nodes,
                 keep_alive=keep_alive,
             )

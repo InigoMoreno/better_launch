@@ -1768,7 +1768,7 @@ Takeoff in 3... 2... 1...
             try:
                 with open(file_path) as f:
                     source = f.read()
-                    
+
                 code = compile(source, launchfile, "exec")
 
                 # Make sure the included launch file reuses our BetterLaunch instance

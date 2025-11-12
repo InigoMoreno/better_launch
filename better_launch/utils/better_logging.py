@@ -12,7 +12,7 @@ from .colors import get_contrast_color
 ROSLOG_PATTERN_ROS = "%%{severity}%%{time}%%{message}"
 
 # Regular expression matching ROSLOG_PATTERN_ROS. The named groups will be matched to log
-# Record attributes via their group names. 
+# Record attributes via their group names.
 ROSLOG_PATTERN_BL = r"%%(?P<levelname>\w+)%%(?P<created>[\d.]+)%%(?P<msg>[\s\S]*)"
 
 
@@ -71,7 +71,7 @@ def _with_per_logger_formatting(cls):
 
 
 class PrettyLogFormatter(logging.Formatter):
-    default_screen_format = "[{levelcolor_start}{levelname}{levelcolor_end}] [{sourcecolor_start}{name}{sourcecolor_end}] [{asctime}]\n{message}"
+    default_screen_format = "{sourcecolor_start}{name:>{name_width}}:{sourcecolor_end} {levelcolor_start}{message}{levelcolor_end}"
     default_file_format = "[{levelname}] [{asctime}] {message}"
 
     def __init__(
@@ -105,7 +105,7 @@ class PrettyLogFormatter(logging.Formatter):
         defaults : dict[str, Any], optional
             Defaults the formatter may use when formatting strings.
         roslog_pattern : str, optional
-            The pattern used for matching incoming log messages. The pattern should define named groups that will be matched to logging.Record attributes via their names. 
+            The pattern used for matching incoming log messages. The pattern should define named groups that will be matched to logging.Record attributes via their names.
         source_colors : str | int | Iterable[int] | dict[str, Any], optional
             Colors to use when formatting `sourcecolor_start` tags based on the source of the log report. If a string, integer or iterable, use this as the color for all sources. If None, use a different color for every source. Pass a dict to specify custom colors for a set of sources.
         log_colors : str | int | Iterable[int] | dict[str, Any], optional
@@ -136,6 +136,7 @@ class PrettyLogFormatter(logging.Formatter):
         if no_colors:
             self.source_colors["*"] = ""
             self.log_colors["*"] = ""
+        self.name_width = 0
 
     def get_source_color(self, source: str) -> str:
         """Return the color associated with the provided source."""
@@ -145,7 +146,7 @@ class PrettyLogFormatter(logging.Formatter):
             self.source_colors[source] = get_contrast_color()
 
         color = self.source_colors.get(source, "")
-        color_start = self.format_color(color)
+        color_start = self.format_color(color, background=True)
         color_end = "\x1b[0m" if color_start else ""
 
         return color_start, color_end
@@ -162,17 +163,20 @@ class PrettyLogFormatter(logging.Formatter):
 
         return color_start, color_end
 
-    def format_color(self, color: Any) -> str:
+    def format_color(self, color: Any, background: bool = False) -> str:
         if isinstance(color, str):
             return color
 
         if isinstance(color, int):
-            return f"\x1b[38;5;{color}m"
+            code = 48 if background else 38
+            return f"\x1b[{code};5;{color}m"
 
         if isinstance(color, (tuple, list)):
-            return f"\x1b[38;2;{color[0]};{color[1]};{color[2]}m"
+            code = 48 if background else 38
+            return f"\x1b[{code};2;{color[0]};{color[1]};{color[2]}m"
 
         return ""
+
 
     def formatTime(self, record, datefmt=None):
         try:
@@ -184,6 +188,8 @@ class PrettyLogFormatter(logging.Formatter):
             return record.created
 
     def format(self, record):
+        if "ExternalShutdownException" in record.msg:
+            return ""
         match = self.roslog_pattern.match(record.msg)
 
         if match:
@@ -208,7 +214,8 @@ class PrettyLogFormatter(logging.Formatter):
         record.levelcolor_start, record.levelcolor_end = self.get_loglevel_color(
             record.levelno
         )
-
+        self.name_width = max(self.name_width, len(record.name))
+        record.name_width = self.name_width
         return super().format(record)
 
 
@@ -288,7 +295,7 @@ def configure_logger(
             if screen_handler not in logger.handlers:
                 if not screen_formatter:
                     screen_formatter = roslog.launch_config.screen_formatter
-                
+
                 screen_handler.setFormatterFor(logger, screen_formatter)
                 logger.addHandler(screen_handler)
 
@@ -297,7 +304,7 @@ def configure_logger(
             if common_log_handler not in logger.handlers:
                 if not log_formatter:
                     log_formatter = roslog.launch_config.file_formatter
-                
+
                 common_log_handler.setFormatterFor(logger, log_formatter)
                 logger.addHandler(common_log_handler)
 

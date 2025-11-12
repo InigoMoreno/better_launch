@@ -3,7 +3,7 @@ import colorsys
 
 class HighContrastColorGenerator:
     """Generates RGB colors with a certain distance apart so that subsequent colors are visually distinct."""
-    
+
     def __init__(self):
         # Golden ratio conjugate, ensures well-spaced hues
         self.hue_step = 0.61803398875
@@ -16,7 +16,7 @@ class HighContrastColorGenerator:
     def __next__(self):
         """Generates the next high-contrast color."""
         self.hue = (self.hue + self.hue_step) % 1
-        r, g, b = colorsys.hsv_to_rgb(self.hue, 1, 1)
+        r, g, b = colorsys.hsv_to_rgb(self.hue, 1, .5)
         return (int(r * 255), int(g * 255), int(b * 255))
 
     def __call__(self):
