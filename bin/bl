@@ -178,7 +178,7 @@ class BetterLaunchFile(LaunchFile):
                     get_args(Colormode), case_sensitive=False
                 ),
                 show_choices=True,
-                default=get_args(Colormode)[0],
+                default=None,
                 help="Override the logging color mode",
             )
         ])

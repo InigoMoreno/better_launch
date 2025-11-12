@@ -269,7 +269,7 @@ def _launch_this_wrapper(
                 ["--bl_colormode_override"],
                 type=click.types.Choice(get_args(Colormode), case_sensitive=False),
                 show_choices=True,
-                default=get_args(Colormode)[0],
+                default=colormode,
                 help="Override the logging color mode",
                 expose_value=False,
                 callback=click_colormode_override,
