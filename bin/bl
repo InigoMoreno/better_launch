@@ -354,10 +354,10 @@ class Ros2LaunchFile(LaunchFile):
         super().__init__(package, launchfile, filepath, params, doc)
 
     def run(self, ctx: click.Context, **kwargs) -> None:
-        print(
-            f">> Delegating to ROS2 launch: {self.package}/{self.launchfile}, args={kwargs}",
-            flush=True,
-        )
+        # print(
+        #     f">> Delegating to ROS2 launch: {self.package}/{self.launchfile}, args={kwargs}",
+        #     flush=True,
+        # )
 
         # First argument becomes argv[0], so should be the program name
         args = ["ros2", "launch", self.filepath]

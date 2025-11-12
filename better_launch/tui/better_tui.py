@@ -245,7 +245,7 @@ class BetterTui:
 
         @bind("c-c")
         async def _(event: KeyPressEvent):
-            self._switch_mode(AppMode.CONFIRM_EXIT)
+            self.quit("user request")
 
         @bind("space", filter=~Condition(self._is_search_visible))
         def _(event: KeyPressEvent):

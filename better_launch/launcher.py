@@ -185,7 +185,7 @@ class BetterLaunch(metaclass=_BetterLaunchMeta):
         self._shutdown_future = Future()
         self._shutdown_callbacks = []
 
-        self.hello()
+        # self.hello()
 
     def hello(self) -> None:
         """Prints our welcome message and some useful information.

@@ -24,7 +24,7 @@ default_log_colormap = {
     # 20m: resets only attributes (underline, etc.), leaving colors unchanged.
     # 39m: resets only foreground color, leaving attributes unchanged.
     # 49m: resets only background color, leaving attributes unchanged.
-    "INFO": "\x1b[92;20m",
+    "INFO": "",
     "WARNING": "\x1b[93;20m",
     "ERROR": "\x1b[91;20m",
     "CRITICAL": "\x1b[95;20m",
