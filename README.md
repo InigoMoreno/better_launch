@@ -5,7 +5,7 @@
 
 
 > [!TIP]
-> Just looking for the [documentation](https://dfki-ric.github.io/better_launch/)? 
+> Just looking for the [documentation](https://dfki-ric.github.io/better_launch/)?
 > We also have multiple [examples](examples/)!
 
 
@@ -166,8 +166,8 @@ from rclpy import Timer
 @launch_this
 def my_start(
     # Launch arguments in function signature
-    turtlesim_ns: str = "turtlesim1", 
-    use_provided_red: bool = False, 
+    turtlesim_ns: str = "turtlesim1",
+    use_provided_red: bool = False,
     new_background_r: int = 200,
 ):
     bl = BetterLaunch()
@@ -178,7 +178,7 @@ def my_start(
             package="turtlesim",
             executable="turtlesim_node",
             name="sim",
-            # Pass parameters directly 
+            # Pass parameters directly
             params={"background_r": 120}
         )
 
@@ -247,9 +247,9 @@ Because *better_launch* does not use the ROS2 launch system, some aspects work d
 
 
 ## Action immediacy
-In ROS2 launch, launch files create tasks that are then passed to an asynchronous event loop. This is the reason why e.g. checking for launch parameter values is so incredibly weird - they simply don't exist yet by the time you define the actions. In *better_launch* however, all actions are taken immediately: if you create a node, its process is started right away; if you include another *better_launch* launch file, its contents will be handled before the function returns. 
+In ROS2 launch, launch files create tasks that are then passed to an asynchronous event loop. This is the reason why e.g. checking for launch parameter values is so incredibly weird - they simply don't exist yet by the time you define the actions. In *better_launch* however, all actions are taken immediately: if you create a node, its process is started right away; if you include another *better_launch* launch file, its contents will be handled before the function returns.
 
-The only exception to this is adding ROS2 launch actions, e.g. including regular ROS2 launch files. Since these still rely on the ROS2 launch system, they need to be turned into asynchronous tasks and passed to the event loop. Usually a ROS2 `LaunchService` sub-process is started the first time a ROS2 action is passed to *better_launch*. From then on this process will handle all ROS2 actions asynchronously in the background. 
+The only exception to this is adding ROS2 launch actions, e.g. including regular ROS2 launch files. Since these still rely on the ROS2 launch system, they need to be turned into asynchronous tasks and passed to the event loop. Usually a ROS2 `LaunchService` sub-process is started the first time a ROS2 action is passed to *better_launch*. From then on this process will handle all ROS2 actions asynchronously in the background.
 
 > While the output of the ROS2 launch service process (and its nodes) is captured and formatted by *better_launch* just like for all other nodes, these will usually appear and behave as one single `launch_service` unit in the TUI (unless `manage_foreign_nodes` is true, see above).
 
@@ -265,7 +265,7 @@ When passing arguments to a node in ROS2, in the end everything is passed as str
 
 
 ## Declaring launch arguments
-Simply put: you don't. *better_launch* will check the signature of your launch function and turn all arguments into launch arguments. For example, if your launch function has an `enable_x` argument, you will be able to pass it with `--enable_x` from the command line. Under the hood *better_launch* is using [click](https://click.palletsprojects.com/), so every launch file you write comes with proper CLI support. 
+Simply put: you don't. *better_launch* will check the signature of your launch function and turn all arguments into launch arguments. For example, if your launch function has an `enable_x` argument, you will be able to pass it with `--enable_x` from the command line. Under the hood *better_launch* is using [click](https://click.palletsprojects.com/), so every launch file you write comes with proper CLI support.
 
 > Tip: try adding a docstring to your launch function and call your launch file with `--help`!
 
@@ -275,7 +275,7 @@ You do **not** have to put `ros__parameters` in your configs anymore when using 
 
 
 ## Logging
-Just like ROS2 launch, *better_launch* takes care of managing loggers and redirecting everything where it belongs (in fact that part is largely copied from ROS2 launch). However, I did away with the in my opinion not very useful separation between a node's `stdout` and `stderr`, since nodes apparently write their log output to `stderr` by default. 
+Just like ROS2 launch, *better_launch* takes care of managing loggers and redirecting everything where it belongs (in fact that part is largely copied from ROS2 launch). However, I did away with the in my opinion not very useful separation between a node's `stdout` and `stderr`, since nodes apparently write their log output to `stderr` by default.
 
 I also added a reformatting layer so that colors and nicer screen output are possible. The format can be customized by passing your own logging format strings to `launch_this`. Alternatively, you may set the `OVERRIDE_SCREEN_LOG_FORMAT` and `OVERRIDE_FILE_LOG_FORMAT` environment variables.
 
@@ -305,7 +305,7 @@ I am not an expert on profiling code. Even though *better_launch* uses synchrono
 <details>
   <summary>psutil</summary>
 
-[psutil](https://psutil.readthedocs.io/en/latest/index.html#psutil.Process.memory_full_info) shows that *better_launch* uses more CPU in the beginning and more memory in total compared to `ros2 launch`. The memory reported is the unique set size (see the previous link). I'm not sure how these results relate to the memray statistics above. 
+[psutil](https://psutil.readthedocs.io/en/latest/index.html#psutil.Process.memory_full_info) shows that *better_launch* uses more CPU in the beginning and more memory in total compared to `ros2 launch`. The memory reported is the unique set size (see the previous link). I'm not sure how these results relate to the memray statistics above.
 
 ![](docs/benchmarks/results/psutil/cpu_usage.png)
 
@@ -358,9 +358,6 @@ Then run the following commands to install the dependencies into your *venv*.
 ```bash
 # Can't use rosdep as it doesn't know most python packages
 pip install -r path/to/better_launch/requirements.txt
-
-# Optional, used for anonymous node names
-pip install wonderwords
 ```
 </details>
 
@@ -375,9 +372,9 @@ rosdep update
 rosdep install --from-paths src --ignore-src -y
 ```
 
-You can also install an optional dependency via pip:
+# Install any dependencies not offered by your package manager via pip
+sudo pip install --break-system-packages docstring_parser
 
-```bash
 # Optional, used for anonymous node names
 sudo pip install --break-system-packages wonderwords
 ```
@@ -449,7 +446,7 @@ def main(turtlesim_ns = "turtlesim2", use_provided_red = True, new_background_r 
     bl = BetterLaunch()
 
     bl.include(
-        "launch_tutorial", 
+        "launch_tutorial",
         "example_substitutions.launch.py",
         pass_all_args=True,  # or pass as keyword arguments
     )

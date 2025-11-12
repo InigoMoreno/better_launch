@@ -5,14 +5,15 @@ import os
 import signal
 import inspect
 import time
-import re
 import threading
 import subprocess
+from fnmatch import fnmatch
 from pathlib import Path
 from concurrent.futures import Future, CancelledError, TimeoutError
 from contextlib import contextmanager
 import logging
 import yaml
+import secrets
 
 from rclpy.node import (
     Node as RosNode,
@@ -31,20 +32,6 @@ if TYPE_CHECKING:
         ActionClient as RosActionClient,
     )
 
-try:
-    # For anonymous nodes
-    import wonderwords
-
-    _uuid_source = wonderwords.RandomWord(exclude_with_spaces=True)
-
-    def _generate_uuid() -> str:
-        return _uuid_source.word()
-
-except ImportError:
-    import uuid
-
-    def _generate_uuid() -> str:
-        return uuid.uuid4().hex
 
 from better_launch.elements import (
     Group,
@@ -69,6 +56,7 @@ from better_launch.utils.introspection import (
     find_launchthis_function,
 )
 from better_launch.utils.better_logging import LogSink
+from better_launch.utils.random_names import get_unique_word
 from better_launch.ros.ros_adapter import ROSAdapter
 from better_launch.ros import logging as roslog
 
@@ -139,6 +127,8 @@ class BetterLaunch(metaclass=_BetterLaunchMeta):
         name: str = None,
         launch_args: dict[str, Any] = None,
         root_namespace: str = "/",
+        *,
+        short_unique_names: bool = False,
     ):
         """Note that BetterLaunch is a singleton: only the first invocation to `__init__` will succeed. All subsequent calls will return the previous instance. If you need access to the BetterLaunch instance outside your launch function, consider using one of the following classmethods instead:
         * :py:meth:`BetterLaunch.instance <_BetterLaunchMeta.instance>`
@@ -152,6 +142,8 @@ class BetterLaunch(metaclass=_BetterLaunchMeta):
             Override the launch arguments BetterLaunch has access to. By default this will be the launch function's arguments. These will mainly be used for passing to included launch files.
         root_namespace : str, optional
             The namespace of the root group.
+        short_unique_names : bool, optional
+            If True, use short random hex strings for unique names instead of random words.
         """
         if not name:
             if not BetterLaunch._launchfile:
@@ -184,6 +176,8 @@ class BetterLaunch(metaclass=_BetterLaunchMeta):
         self._sigterm_received = False
         self._shutdown_future = Future()
         self._shutdown_callbacks = []
+
+        self.short_unique_names = short_unique_names
 
         # self.hello()
 
@@ -234,10 +228,10 @@ Takeoff in 3... 2... 1...
         """
         if exit_with_last_node:
             while not self._shutdown_future.done():
-                nodes = self.all_nodes(
-                        include_components=True,
-                        include_launch_service=True,
-                        include_foreign=False
+                nodes = self.get_bl_nodes(
+                    include_components=True,
+                    include_launch_service=True,
+                    include_foreign=False,
                 )
 
                 if all(not n.is_running for n in nodes):
@@ -253,22 +247,39 @@ Takeoff in 3... 2... 1...
             except (CancelledError, TimeoutError):
                 pass
 
-    def get_unique_name(self, name: str = "") -> str:
-        """Adds a unique suffix to the provided string.
+    def get_unique_name(self, name: str = "", check_running_nodes: bool = True) -> str:
+        """Returns a unique name. If a name is provided it will be prepended with an underscore.
 
         Parameters
         ----------
         name : str, optional
             The string to use as the base.
+        check_running_nodes : bool, optional
+            If true, check the currently running ROS2 nodes for name collisions.
 
         Returns
         -------
         str
-            The passed in string with a unique suffix.
+            A unique name.
         """
-        return name + "_" + _generate_uuid()
+        node_names = set()
+        if check_running_nodes:
+            nodes = self.get_bl_nodes(include_components=True, include_foreign=True)
+            node_names.update(n.name for n in nodes)
 
-    def all_groups(self) -> list[Group]:
+        while True:
+            if self.short_unique_names:
+                u = secrets.token_hex(4)
+            else:
+                u = get_unique_word()
+
+            if name:
+                u = name + "_" + u
+
+            if u not in node_names:
+                return u
+
+    def get_groups(self) -> list[Group]:
         """Returns a list of all in the order they were created.
 
         Returns
@@ -288,23 +299,25 @@ Takeoff in 3... 2... 1...
 
         return groups
 
-    def all_nodes(
+    def get_bl_nodes(
         self,
         *,
         include_components: bool = False,
         include_launch_service: bool = True,
         include_foreign: bool = False,
     ) -> list[AbstractNode]:
-        """Returns a list of all nodes in the order they were added. Components will be added right after their composers. If a ROS2 launch service has been started it will be added at the very end.
+        """Returns a list of all nodes in the order they were added. Components will be added right after their composers.
+
+        Note that this will only return nodes that can be managed by better_launch. If a node process creates multiple nodes only the first node can be discovered, as ROS2 does not provide an API linking a node to its process (or even just its package).
 
         Parameters
         ----------
         include_components : bool, optional
-            Whether to include :py:class:`Component` instances.
+            Whether to include :py:class:`Component` instances. This will *not* include components that have been loaded from outside (e.g. `ros2 component load`).
         include_launch_service : bool, optional
-            Whether to include the ROS2 launch service wrapper if it was created.
+            Whether to include the ROS2 launch service wrapper if it was created. Will be included after the regular nodes and before the foreign nodes.
         include_foreign : bool, optional
-            Whether to include foreign nodes that have not been started by this launcher instance.
+            Whether to include foreign nodes that have not been started by this launcher instance. Will be appended at the end of the returned nodes. However, take heed of the above warning regarding node discovery.
 
         Returns
         -------
@@ -312,36 +325,77 @@ Takeoff in 3... 2... 1...
             A list of all nodes, sorted by when they were added.
         """
         nodes = []
-        groups = self.all_groups()
+        groups = self.get_groups()
 
         for g in groups:
             for n in g.nodes:
                 nodes.append(n)
                 if include_components and isinstance(n, Composer):
+                    # Components may have been added from outside (e.g. ros2 control load)
                     nodes.extend(n.managed_components)
 
         if include_launch_service and self._ros2_launcher:
             nodes.append(self._ros2_launcher)
 
         if include_foreign:
-            nodes.extend(find_foreign_nodes())
+            # Note that self.shared_node.get_node_names_and_namespaces() will only give us the
+            # names and namespaces, but no handle on the actual processes, not even a package
+
+            # TODO should check if it's a composer and has subnodes, but we won't know the
+            # components' handles or plugins...
+            # if include_components:
+            #     for f in foreign:
+            #         if Composer.is_composer(f):
+            #             composer = Composer(f)
+            #             for cid, component in composer.get_live_components().items():
+            #                 nodes.append(Component(...))
+
+            foreign = self.get_foreign_nodes()
+            nodes.extend(foreign)
 
         return nodes
 
+    def get_foreign_nodes(self) -> list[ForeignNode]:
+        """Lists all running nodes that have a process but have not been started by this better_launch process.
+
+        Note however that if a process starts multiple nodes, only the first node can be discovered. This is because ROS2 does not provide an API for getting the process parameters from a node.
+
+        Returns
+        -------
+        list[ForeignNode]
+            All nodes with a process that have not been started by this better_launch process.
+        """
+        return find_foreign_nodes()
+
+    def all_ros2_node_names(self) -> list[str]:
+        """Returns a list of all currently registered node's full names (namespace + name).
+
+        This list is guaranteed to be complete as far as ROS2 is concerned. If you require a node object you can actually interact with consider using :py:meth:`query_node` or :py:meth:`get_bl_nodes` instead.
+
+        Returns
+        -------
+        list[str]
+            A list of all running nodes' full names.
+        """
+        return [
+            f"{n[1].rstrip('/')}/{n[0]}"
+            for n in self.shared_node.get_node_names_and_namespaces()
+        ]
+
     def query_node(
         self,
-        fullname_regex: str,
+        pattern: str,
         *,
         include_components: bool = True,
         include_launch_service: bool = False,
         include_foreign: bool = False,
     ) -> AbstractNode:
-        """Retrieve the first node whos :py:meth:`AbstractNode.fullname` matches the provided regex.
+        """Retrieve the first node matching the provided pattern.
 
         Parameters
         ----------
-        name_regex : str
-            The regex to match the nodes' full names against.
+        pattern : str
+            Either the name of a node, or a qualified node name (i.e. namespace + name). If a namespace is included it must be absolute, but may include `*` or `**` wildcards to skip one or more groups (via :py:meth:`fnmatch`).
         include_components : bool, optional
             Whether to include components in the results, if any.
         include_launch_service : bool, optional
@@ -352,33 +406,32 @@ Takeoff in 3... 2... 1...
         Returns
         -------
         AbstractNode
-            The first node matching the provided regex, or None if none matched.
+            The first node matching the provided pattern, or None if none matched.
         """
-        reg = re.compile(fullname_regex)
-        for node in self.all_nodes(
+        for node in self.get_bl_nodes(
             include_components=include_components,
             include_launch_service=include_launch_service,
             include_foreign=include_foreign,
         ):
-            if reg.fullmatch(node.fullname):
+            if node.name == pattern or fnmatch(node.fullname, pattern):
                 return node
 
         return None
 
     def query_nodes(
         self,
-        name_regex: str,
+        pattern: str,
         *,
         include_components: bool = True,
         include_launch_service: bool = False,
         include_foreign: bool = False,
-    ) -> list[AbstractNode]:
-        """Retrieve all nodes whos :py:meth:`AbstractNode.fullname` matches the provided regex.
+    ) -> Generator[AbstractNode, None, None]:
+        """Yield all nodes matching the provided pattern.
 
         Parameters
         ----------
-        name_regex : str
-            The regex to match the nodes' full names against.
+        pattern : str
+            Either the name of a node, or a qualified node name (i.e. namespace + name). If a namespace is included it must be absolute, but may include `*` or `**` wildcards to skip one or more groups (via :py:meth:`fnmatch`).
         include_components : bool, optional
             Whether to include components in the results, if any.
         include_launch_service : bool, optional
@@ -388,23 +441,20 @@ Takeoff in 3... 2... 1...
 
         Returns
         -------
-        list[AbstractNode]
-            A list of all nodes matching the regex.
+        Generator[AbstractNode, None, None]
+            The nodes matching the pattern.
         """
-        reg = re.compile(name_regex)
-        return [
-            node
-            for node in self.all_nodes(
-                include_components=include_components,
-                include_launch_service=include_launch_service,
-                include_foreign=include_foreign,
-            )
-            if reg.match(node.fullname)
-        ]
+        for node in self.get_bl_nodes(
+            include_components=include_components,
+            include_launch_service=include_launch_service,
+            include_foreign=include_foreign,
+        ):
+            if node.name == pattern or fnmatch(node.fullname, pattern):
+                yield node
 
     @staticmethod
-    def ros_version() -> str:
-        """Returns the name of the currently sourced ros version (i.e. *$ROS_VERSION*)."""
+    def ros_distro() -> str:
+        """Returns the name of the currently sourced ros distro (i.e. *$ROS_DISTRO*)."""
         return os.environ["ROS_DISTRO"]
 
     @property
@@ -440,6 +490,7 @@ Takeoff in 3... 2... 1...
         """The most recent group."""
         return self._group_stack[-1]
 
+    # TODO remove?
     def find_group_for_namespace(self, namespace: str, create: bool = False) -> Group:
         """Find the group representing the passed namespace.
 
@@ -537,7 +588,7 @@ Takeoff in 3... 2... 1...
             self.logger.info(f"Shutdown: {reason}")
 
         # Tell all nodes to shut down
-        for n in self.all_nodes(
+        for n in self.get_bl_nodes(
             include_components=False, include_launch_service=True, include_foreign=False
         ):
             try:
@@ -630,6 +681,9 @@ Takeoff in 3... 2... 1...
                 filename = resolve(filename)
 
             if os.path.isabs(filename):
+                self.logger.info(
+                    f"find({package}, {filename}, {subdir}):1 -> {filename}"
+                )
                 return filename
 
         if not package:
@@ -648,6 +702,7 @@ Takeoff in 3... 2... 1...
             base_path = resolve(base_path)
 
         if not filename and subdir in (None, "", "**"):
+            self.logger.info(f"find({package}, {filename}, {subdir}):2 -> {base_path}")
             return base_path
 
         if not subdir:
@@ -656,20 +711,28 @@ Takeoff in 3... 2... 1...
         for candidate in Path(base_path).glob(subdir):
             if not filename:
                 # Return the first candidate
-                return str(candidate.resolve().absolute())
+                ret = str(candidate.resolve().absolute())
+                self.logger.info(f"find({package}, {filename}, {subdir}):3 -> {ret}")
+                return ret
 
             if candidate.is_file() and candidate.match(f"**/{filename}"):
                 # We found a match
-                return str(candidate.resolve().absolute())
+                ret = str(candidate.resolve().absolute())
+                self.logger.info(f"find({package}, {filename}, {subdir}):4 -> {ret}")
+                return ret
 
             elif candidate.is_dir():
                 # Candidate is a dir, search the filename within
                 ret = next(candidate.glob(f"**/{filename}"), None)
                 if ret:
-                    return str(ret.resolve().absolute())
+                    ret = str(ret.resolve().absolute())
+                    self.logger.info(
+                        f"find({package}, {filename}, {subdir}):5 -> {ret}"
+                    )
+                    return ret
 
         raise ValueError(
-            f"Could not find file or directory (filename={filename}, package={package}, subdir={subdir}), searched path was {base_path}"
+            f"Could not find file or directory (package={package}, filename={filename}, subdir={subdir}), searched path was {base_path}"
         )
 
     def resolve_string(self, s: str) -> str:
@@ -709,15 +772,16 @@ Takeoff in 3... 2... 1...
 
     def load_params(
         self,
-        package: str,
-        configfile: str,
+        package: str = None,
+        configfile: str = None,
         subdir: str = None,
         *,
-        node_or_namespace: str | Node = None,
+        qualifier: str | Node = None,
+        matching_only: bool = False,
     ) -> dict[str, Any]:
         """Load parameters from a yaml file located through :py:meth:`find`.
 
-        If the config only contains a `ros__parameters` section the entire config is returned regardless of whether `node_or_namespace` was passed. Otherwise, if `node_or_namespace` is provided, the loaded config dict is searched for a matching section. If no matching section can be found a ValueError will be raised.
+        If the config only contains a `ros__parameters` section the entire config is returned regardless of whether `qualifier` was passed. Otherwise, if `qualifier` is provided, the loaded config dict is searched for a matching section. If no matching section can be found a ValueError will be raised.
 
         The following wildcards are supported for parameter sections:
         * `/**`: matches any number of tokens, may be followed by additional tokens and a node name
@@ -737,8 +801,10 @@ Takeoff in 3... 2... 1...
             The name of the config file to locate.
         subdir : str, optional
             A path fragment that the config file must be located in.
-        node_or_namespace : str | Node, optional
+        qualifier : str | Node, optional
             Used to specifiy which section of the config to return.
+        matching_only : bool, optional
+            If True, load only those params matching the qualifier. If no qualifier was given, only load global params (and those under `/**`).
 
         Returns
         -------
@@ -748,68 +814,57 @@ Takeoff in 3... 2... 1...
         Raises
         ------
         ValueError
-            If the path cannot be resolved, if `node_or_namespace` is supplied and no matching section could be found, or if a substitution failed.
+            If the path cannot be resolved, if `qualifier` is supplied and no matching section could be found, or if a substitution failed.
         IOError
             If the config file could not be read.
         """
         path = self.find(package, configfile, subdir)
 
         with open(path) as f:
-            params = yaml.safe_load(f)
+            content = f.read()
+            is_ros_params = "ros__parameters" in content
+            params = yaml.safe_load(content)
 
+        # Return the entire config if it doesn't follow the ros pattern
+        if not is_ros_params:
+            return params
+
+        # No node- or namespace specific sections
         if "ros__parameters" in params:
-            # Return the entire config if it doesn't contain sections for different nodes/namespaces
             return params["ros__parameters"]
 
         final_params = {}
 
-        if node_or_namespace:
-            ns = node_or_namespace
-            if isinstance(ns, AbstractNode):
-                ns = ns.fullname
+        # Depth-first search through the params to find any "ros__parameters" keys
+        todo = [("", params)]
+        while todo:
+            path, cur = todo.pop(0)
 
-            ns = ns.strip("/")
+            for key, val in cur.items():
+                if key in ("*", "**", "/**", "ros__parameters"):
+                    val = val.get("ros__parameters", val)
 
-            # See https://github.com/ros2/design/blob/gh-pages/articles/160_ros_command_line_arguments.md
-            def path_to_regex(path: str) -> str:
-                parts = path.strip("/").split("/")
-                regex_parts = []
+                    # Global parameters should always be included
+                    if (
+                        not path
+                        or not matching_only
+                        or (qualifier and fnmatch(qualifier, path))
+                    ):
+                        for param_name, param_val in val.items():
+                            param_path = f"{path}:{param_name}" if path else param_name
+                            final_params[param_path] = param_val
 
-                for part in parts:
-                    if part == "**":
-                        # Match any number of tokens
-                        regex_parts.append(r".*")
-                    elif part == "*":
-                        # Match a single token
-                        regex_parts.append(r"[^/]+")
-                    else:
-                        # Regular token
-                        regex_parts.append(part)
+                elif isinstance(val, dict):
+                    branch_path = f"{path}/{key}" if path else key
+                    todo.append((branch_path, val))
 
-                # We do NOT start with a slash as only the node name could be specified
-                return "^" + "/".join(regex_parts) + "$"
-
-            # According to the above design document, params files are not allowed to have nesting,
-            # (e.g. my_namespace/: other_namespace/node: ros__parameters), so no need to delve
-            for key in params.keys():
-                pattern = path_to_regex(key)
-                if re.match(pattern, ns) is not None:
-                    final_params.update(params[key])
-                    # Don't break as there can be multiple matching entries due to wildcards
-                    # See https://docs.ros.org/en/jazzy/How-To-Guides/Node-arguments.html
-
-            if not final_params:
-                # We didn't find any matching parameters, so this either doesn't contain a section
-                # for this node, or it is not a ros parameters file
-                raise ValueError(f"No param section matching '{ns}'")
-        else:
-            # No node or namespace provided, so we don't know which section we should resolve
-            final_params = params
-
-        # Discard the ros__parameters section if it's at the root
-        if "ros__parameters" in final_params:
-            final_params.update(final_params["ros__parameters"])
-            final_params.pop("ros__parameters", None)
+                else:
+                    # Some value that's not a dict and not a ros__parameters, just add it
+                    leaf_path = f"{path}/{key}" if path else key
+                    if not matching_only or (
+                        qualifier and fnmatch(qualifier, leaf_path)
+                    ):
+                        final_params[leaf_path] = val
 
         return final_params
 
@@ -992,8 +1047,10 @@ Takeoff in 3... 2... 1...
         if isinstance(message_type, str):
             message_type: type = self.get_ros_message_type(message_type)
 
-        pub = self.publisher(topic, message_type, qos_profile)
         msg = message_type(**message_args)
+        self.logger.info(f"Publishing single message to {topic}:\n   {msg}")
+
+        pub = self.publisher(topic, message_type, qos_profile)
         pub.publish(msg)
 
         if time_to_publish is not None and time_to_publish > 0.0:
@@ -1132,6 +1189,7 @@ Takeoff in 3... 2... 1...
         else:
             req = service_type.Request()
 
+        self.logger.info(f"Calling service {topic}:\n   {req}")
         srv = self.service_client(topic, service_type, timeout, qos_profile)
 
         if call_async:
@@ -1333,9 +1391,25 @@ Takeoff in 3... 2... 1...
         if isinstance(cmd, str):
             cmd = cmd.split(" ")
 
-        return (
-            subprocess.check_output(cmd, stderr=subprocess.STDOUT).decode().rstrip("\n")
+        bl = BetterLaunch.instance()
+        if bl:
+            logger = bl.logger
+        else:
+            logger = logging.getLogger("Exec")
+
+        # In case this is a ROS2 process we want it to use a different format
+        env = os.environ.copy()
+        env["RCUTILS_CONSOLE_OUTPUT_FORMAT"] = "  [EXEC] {message}"
+
+        logger.info(f"Executing command {cmd}")
+        ret = (
+            subprocess.check_output(cmd, env=env, stderr=subprocess.STDOUT)
+            .decode()
+            .rstrip("\n")
         )
+        logger.info(ret)
+
+        return ret
 
     def node(
         self,
@@ -1361,6 +1435,8 @@ Takeoff in 3... 2... 1...
         lifecycle_waittime: float = 0.01,
         lifecycle_target: LifecycleStage = LifecycleStage.ACTIVE,
         raw: bool = False,
+        remap_qualifier: str = None,
+        qualify_all_remaps: bool = False,
     ) -> Node:
         """Create a new ROS2 node process. The bread and butter of every ROS setup!
 
@@ -1412,6 +1488,10 @@ Takeoff in 3... 2... 1...
             The lifecycle stage to bring the node into after starting. Has no effect if `autostart_process` is False or if the node does not appear to be a lifecycle node after waiting `ros_waittime + lifecycle_waittime`.
         raw : bool, optional
             If True, don't treat the executable as a ROS2 node and avoid passing it any command line arguments except those specified.
+        remap_qualifier : str, optional
+            Additional qualifier that will precede the node's `__ns` and `__name` remap rules. Should be the original name of the node (i.e. whatever its default name is) and can be qualified with a namespace. Useful to prevent multiple nodes with the same name when a process can have more than one node (e.g. `controller_manager`). See `this ROS2 design doc <https://design.ros2.org/articles/static_remapping.html#how-the-syntax-works`_ for more information.
+        qualify_all_remaps : bool, optional
+            If True, apply the `remap_qualifier` to all remaps that are not already qualified.
 
         Returns
         -------
@@ -1456,6 +1536,8 @@ Takeoff in 3... 2... 1...
             respawn_delay=respawn_delay,
             use_shell=use_shell,
             raw=raw,
+            remap_qualifier=remap_qualifier,
+            qualify_all_remaps=qualify_all_remaps,
         )
 
         group.add_node(node)

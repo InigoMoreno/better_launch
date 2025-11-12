@@ -140,7 +140,7 @@ def _launch_this_wrapper(
         sigint_count += 1
 
         # Some terminals will send SIGINT multiple times on ctrl-c, so we ignore the second one
-        if sigint_count == 1:
+        if sigint_count == 2:
             return
 
         BetterLaunch()._on_sigint(sig, frame)
@@ -372,38 +372,45 @@ def _expose_ros2_launch_function(launch_func: Callable):
     """
 
     def generate_launch_description():
+        import asyncio
         from launch import LaunchDescription, LaunchContext
-        from launch.actions import DeclareLaunchArgument, OpaqueFunction
+        from launch.actions import DeclareLaunchArgument, OpaqueCoroutine
 
         ld = LaunchDescription()
 
         # Declare launch arguments from the function signature
         sig = inspect.signature(launch_func)
         for param in sig.parameters.values():
-            default = param.default
-            if default is not inspect.Parameter.empty:
+            if param.default is not inspect.Parameter.empty:
                 default = str(param.default)
+            else:
+                default = None
 
             ld.add_action(DeclareLaunchArgument(param.name, default_value=default))
 
-        def ros2_wrapper(context: LaunchContext, *args, **kwargs):
-            # args and kwargs are only used by OpaqueFunction when using it like partial
+        async def ros2_wrapper(context: LaunchContext):
             launch_args = {}
             for k, v in context.launch_configurations.items():
                 try:
                     launch_args[k] = literal_eval(v)
-                except ValueError:
+                except (ValueError, SyntaxError):
                     # Probably a string
+                    # issue #11: SyntaxError happens when a path is passed without quotes
                     # NOTE this should also make passing args to ROS2 much easier
                     launch_args[k] = v
 
             # Call the launch function
             launch_func(**launch_args)
 
-            # Not needed right now, but opaque functions may return additional ROS2 actions
-            return
+            # We must stay alive until the last node has exited
+            bl = BetterLaunch.instance()
+            if bl:
+                while any([n for n in bl.get_bl_nodes() if n.is_running]):
+                    await asyncio.sleep(0.1)
 
-        ld.add_action(OpaqueFunction(function=ros2_wrapper))
+        # A bit of an obscure one, but this way we can stay alive even when all other launch
+        # actions have terminated
+        ld.add_action(OpaqueCoroutine(coroutine=ros2_wrapper))
         return ld
 
     # Add our generate_launch_description function to the module launch_this was called from
